@@ -24,7 +24,7 @@ than a missed detection"* is a real answer.
 **Cover at least three of these five areas.** They're prompts, not a form.
 
 | Area | A question it could answer |
-|---|---|
+| --- | --- |
 | False positives | How often may a human's writing get called AI? |
 | Score spread | How far apart should clearly-AI and clearly-human text score? |
 | Label coverage | Is every one of your three labels actually reachable? |
@@ -42,64 +42,49 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
 
-<!-- Your criterion. It must name a number. -->
+## 1. False Positive Rate on Pure Human Literature
 
-
+The system falsely flags no more than 1 in 20 purely human-written essays or creative submissions (False Positive Rate <= 0.05 / 5%) as `high-confidence AI`.
 
 **Why this target:**
-
-
+Falsely accusing a genuine human creator of AI generation destroys platform trust and community engagement. Because the human cost of a false accusation is vastly higher than missing an AI-generated post, the threshold for accusing human writers must remain strictly conservative.
 
 ---
 
-## 2.
+## 2. Score Separation on Unambiguous Test Fixtures
 
-<!-- Your criterion. -->
-
-
+On a calibration benchmark of 10 clear human articles and 10 raw AI generations, the mean combined confidence score for AI text is at least 0.35 points higher than the mean score for human text.
 
 **Why this target:**
-
-
+If the two distribution means cluster tightly together (e.g. difference < 0.20), the classifier is behaving like an uninformative coin flip. Requiring a 0.35 score spread ensures the combined scoring function produces measurable discriminant utility between clear cases.
 
 ---
 
-## 3.
+## 3. Label Reachability Across the Continuum
 
-<!-- Your criterion. -->
-
-
+In a batch of 50 diverse submissions across formal, casual, mixed, and heavily edited text, every one of the three transparency labels (`high-confidence AI`, `high-confidence human`, and `unsure`) is assigned to at least 15% of the total submissions.
 
 **Why this target:**
-
-
+A trivial system that maps 95% of submissions to `unsure` avoids false positives but provides zero value to moderators. Forcing balanced reachability verifies that all three buckets are actively utilized and reachable across realistic score boundaries.
 
 ---
 
-## 4.
+## 4. Audit Log Integrity and Appeal State Transition
 
-<!-- Your criterion. -->
-
-
+100% of valid requests submitted to `POST /submit` create an auditable entry in `logs/audit.jsonl`, and 100% of valid requests to `POST /appeal` update the content status to `under_review` in the audit log within 500ms.
 
 **Why this target:**
-
-
+Accountability requires that every moderation action has a traceable record. If appeals fail to transition or records drop out of the log, creators are left without legal or procedural recourse against automated decisions.
 
 ---
 
-## 5.
+## 5. Input Validation on Edge-Case Payloads
 
-<!-- Your criterion. -->
-
-
+When `POST /submit` receives empty text, whitespace-only text, missing attributes, or inputs exceeding 20,000 characters, it returns an HTTP 400 Bad Request 100% of the time without crashing the server or invoking model inference.
 
 **Why this target:**
-
-
-
+Running heavy transformer models or regex parsers on malformed or adversarial 100k-character payloads causes denial-of-service, memory leaks, and worker process lockup. Early rejection at the controller boundary protects backend availability
 ---
 
 <!-- ─────────────────────────────────────────────────────────────────────────
