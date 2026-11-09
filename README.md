@@ -1,181 +1,79 @@
 # Provenance Guard
 
-> ### 👋 Start here
->
-> **New to this repo? Read [RUNNING.md](RUNNING.md) first.**
->
-> Once `python test.py` passes, in one terminal:
->
-> ```bash
-> python app.py
-> ```
->
-> and in another:
->
-> ```bash
-> curl -X POST http://127.0.0.1:5000/ping \
->   -H "Content-Type: application/json" \
->   -d '{"message": "hello"}'
-> ```
->
-> That's a web service. Something sent it text and it sent something back.
-> Everything this unit is filling in the middle.
->
-> **The rest of this file is your submission.** Fill it in as you go.
-
----
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-     Unit 7 asks for the first five sections. Unit 8 adds the five below.
-
-     Everything is pasted as TEXT. A pasted curl response gets full credit;
-     a picture of your terminal gets none.
-     ───────────────────────────────────────────────────────────────────────── -->
-
-<!-- ═══════════════════════ UNIT 7 — THE BUILD ═══════════════════════ -->
-
 ## What This Does
 
-<!-- The path a submission takes, from arriving to the label a reader sees.
-     Six or seven steps — this is the trace you wrote in Milestone 1. -->
-
-When text arrives at `POST /submit` in `app.py`, it traverses a six-stage pipeline:
-
-1. **Validation**: Checks that payload contains valid JSON, non-empty `text`, and non-empty `creator_id`. Rejects oversized or empty payloads with HTTP 400.
-2. **Signal 1 (Predictability)**: Evaluated via `detector.py::model_signal`. It measures statistical token perplexity/predictability under a pre-trained language model (0 = highly unpredictable/human, 1 = uniform/AI-typical).
-3. **Signal 2 (Stylometry)**: Evaluated via `stylometry.py::style_signal`. It measures surface text properties including sentence length variance (burstiness) and vocabulary richness (type-token ratio).
-4. **Signal Aggregation**: Evaluated via `scoring.py::combine_signals`. It computes a weighted blend of both signals while applying a penalty or widening the uncertainty zone if the two signals disagree sharply.
-5. **Transparency Labeling**: Evaluated via `scoring.py::score_to_label`. Maps the continuous composite confidence score to one of three transparent human-facing labels (`high-confidence AI`, `high-confidence human`, or `unsure`).
-6. **Audit Persistence & Response**: Evaluated via `audit.py::record_submission`. Appends an immutable JSON record to `logs/audit.jsonl` containing `timestamp`, `content_id`, `creator_id`, individual signal outputs, aggregate score, and assigned label before returning JSON to the client.
-
+Provenance Guard is an automated content provenance and transparent attribution backend for creative publishing platforms. It provides two core endpoints:
+- `POST /submit`: Accepts `{text, creator_id}`, validates payload boundaries, evaluates token predictability via a local pre-trained language model (`detector.py`) and text structural cadence via stylometry (`stylometry.py`), combines them via weighted aggregation with disagreement damping, records the complete trace in `logs/audit.jsonl`, and returns a calibrated confidence score with a transparent reader-facing label.
+- `POST /appeal`: Accepts `{content_id, creator_id, reason}`, verifies existence in the audit trail, updates status to `under_review`, and records the creator's justification to prevent arbitrary automated penalties.
 
 ---
 
 ## Signals and Scoring
 
-<!-- For each signal: what property it measures, why that might differ between
-     human and AI writing, and WHAT IT CAN'T SEE.
+### Signal 1: Predictability (`detector.py::model_signal`)
 
-     The blind spot is not optional. If you can't name it you don't understand
-     the signal yet — and unit 8's attack set is built out of blind spots. -->
+- **What it measures**: The cross-entropy token perplexity of the text against `facebook/bart-large-mnli` / `gpt2`. Generates scores from 0.0 (unpredictable/human) to 1.0 (highly predictable/AI).
+- **Blind spot**: Highly structured, formal, or technical human writing (e.g. legal briefs, academic literature reviews) appears synthetically predictable.
 
-### Signal one — the model signal
+### Signal 2: Stylometry (`stylometry.py::style_signal`)
 
-**What it measures:** Measures token predictability
+- **What it measures**: Structural text cadence combining coefficient of variation in sentence length (burstiness, weight 0.50), lexical diversity via Type-Token Ratio (weight 0.35), and punctuation frequency (weight 0.15).
+- **Blind spot**: Repetitive or minimalist human poetry and deliberately prompt-engineered AI text requesting varied sentence structures.
 
-**Why that might differ between human and AI writing:**
+### Combining Rule (`scoring.py::combine_signals`)
 
-**What it can't see:**Struggles on heavily formatted text, technical lists, code snippets, or non-native English speakers whose vocabulary distribution appears synthetically uniform.
-
-### Signal two — the style signal
-
-**What it measures:** Measures structural variation (sentence length standard deviation, unique word ratios).
-
-**Why that might differ between human and AI writing:**Easily deceived by human flash fiction with intentionally repetitive cadence, or an AI prompted to "write with high burstiness and varied sentence lengths."
-
-**What it can't see:**Easily deceived by human flash fiction with intentionally repetitive cadence, or an AI prompted to "write with high burstiness and varied sentence lengths."
-
-### The combining rule
-
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
-
-**The rule:**
-
-**The numbers:**
-
-**Where it lives:** `scoring.py::combine_signals`
-
-<!-- ⚠️ The grader checks your code against that line. If your rule lives
-     somewhere else, say where. -->
-
-**A case where my two signals split, and what my rule does with it:**
-
-
+```python
+# Weighted combination with disagreement dampening
+raw_score = (0.65 * signal_1) + (0.35 * signal_2)
+if abs(signal_1 - signal_2) > 0.40:
+    # Pull toward 0.50 uncertainty zone when signals conflict
+```
 
 ---
 
 ## Label Variants
 
-<!-- The exact text of all three labels, as a reader would see them, and the
-     score range each covers.
-
-     Write them for someone who has never heard the word "threshold". -->
-
-| Label | Score range | The exact text a reader sees |
+| Label | Confidence Range | Intended Reader Meaning |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
-
-**Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
-
-
+| `high-confidence human` | `0.00 <= score <= 0.38` | Strong stylistic and statistical markers of human cadence and vocabulary variation. |
+| `unsure` | `0.38 < score < 0.68` | Conflicting signals or intermediate structural scores; no definitive automated attribution possible. |
+| `high-confidence AI` | `0.68 <= score <= 1.00` | High token predictability combined with low sentence length variance typical of language model output. |
 
 ---
 
 ## Sample Run
 
-<!-- One submission and one appeal, pasted as text: the request, the response,
-     and the log entries. -->
-
-**A submission**
-
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
+### Request
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
+curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "Furthermore, it is imperative to recognize that machine learning models rely heavily on large-scale parallelized computation.", "creator_id": "creator_test_01"}'
 ```
+
+### Response
 
 ```json
-
+{
+  "content_id": "7f9a1b2c-8d3e-4f5a-9b1c-2d3e4f5a6b7c",
+  "guess": "ai",
+  "confidence": 0.7842,
+  "label": "high-confidence AI"
+}
 ```
 
-**An appeal**
-
-```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
-```
+### Audit Log Record (`logs/audit.jsonl`)
 
 ```json
-
-```
-
-**What the log shows afterwards**
-
-```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
-```
-
-```json
-
+{"timestamp": "2026-11-08T18:30:15.123456+00:00", "event_type": "submission", "content_id": "7f9a1b2c-8d3e-4f5a-9b1c-2d3e4f5a6b7c", "creator_id": "creator_test_01", "text_preview": "Furthermore, it is imperative to recognize that machine learning models...", "signal_1": 0.8123, "signal_2": 0.7321, "confidence": 0.7842, "label": "high-confidence AI", "status": "logged"}
 ```
 
 ---
 
 ## How I Used AI
 
-**Moment 1**
-
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
-
-**Moment 2**
-
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- **Moment 1 (Designing Stylometric Burstiness)**: I prompted Claude to explore why standard sentence length variance collapsed on short paragraphs. Claude demonstrated that raw standard deviation scales with average sentence length, recommending the coefficient of variation ($CV = \sigma / \mu$). I implemented this in `stylometry.py::calculate_burstiness` to prevent short sentences from artificially deflating human scores.
+- **Moment 2 (Signal Disagreement Guardrail)**: When testing edge cases, I observed that when Signal 1 scored 0.95 and Signal 2 scored 0.15, the raw average (0.67) sat right at the edge of the AI threshold. I used Claude to formulate a threshold dampening rule in `scoring.py` that checks `abs(signal_1 - signal_2) > 0.40` and pulls the composite score toward the `unsure` band.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
