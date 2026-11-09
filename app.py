@@ -24,6 +24,7 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import stylometry, scoring
 
 app = Flask(__name__)
 
@@ -124,12 +125,13 @@ def submit():
 
     # Milestone 3: Real Signal 1 from detector.py
     model_score = round(float(detector.model_signal(text)), 4)
+    style_score = round(float(stylometry.style_signal(text)), 4)
 
     # Placeholders for Milestone 4 (stylometry) and Milestone 5 (labeling)
     style_score = 0.50
-    confidence = model_score
+    confidence = scoring.combine_signals(model_score, style_score)
+    label = scoring.score_to_label(confidence)
     guess = "ai" if confidence >= 0.50 else "human"
-    label = "unsure"
 
     # Write to audit.py using its exact parameter signature
     audit.log_decision(

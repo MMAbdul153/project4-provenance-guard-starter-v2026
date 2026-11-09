@@ -1,1 +1,2 @@
 {"timestamp": "2026-11-09T04:53:12+00:00", "content_id": "952d793b-1a72-4269-a323-09feac1c3246", "creator_id": "writer_01", "guess": "human", "model_score": 0.1238, "style_score": 0.5, "combined_score": 0.1238, "label": "unsure", "status": "decided", "text_length": 48}
+{"timestamp": "2026-11-09T05:05:11+00:00", "content_id": "092d5f27-7d83-4b38-b947-84490aef8fd4", "creator_id": "writer_01", "guess": "ai", "model_score": 0.5148, "style_score": 0.5, "combined_score": 0.5096, "label": "unsure", "status": "decided", "text_length": 84}
