@@ -44,20 +44,17 @@ def combine_signals(
     return round(min(1.0, max(0.0, combined)), 4)
 
 
-def score_to_label(score: float) -> str:
+def score_to_label(confidence: float) -> str:
     """
-    Maps composite confidence score to one of three transparent labels.
-    ← Milestone 5
-
-    Labels:
-      - 0.00 <= score <= 0.38 : "high-confidence human"
-      - 0.38 <  score <  0.68 : "unsure"
-      - 0.68 <= score <= 1.00 : "high-confidence AI"
+    Maps continuous confidence score to one of three transparent human-facing labels:
+    - [0.00 - 0.38]: high-confidence human
+    - (0.38 - 0.68): unsure
+    - [0.68 - 1.00]: high-confidence AI
     """
-    s = float(score)
-    if s >= 0.68:
+    score = float(confidence)
+    if score >= 0.68:
         return "high-confidence AI"
-    elif s <= 0.38:
+    elif score <= 0.38:
         return "high-confidence human"
     else:
         return "unsure"

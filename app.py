@@ -25,6 +25,8 @@ import audit
 import config
 import detector
 import stylometry, scoring
+from scoring import score_to_label
+from audit import record_appeal
 
 app = Flask(__name__)
 
@@ -157,17 +159,34 @@ def submit():
     }), 200
 
 
-@app.post("/appeal")
+@app.route("/appeal", methods=["POST"])
 def appeal():
-    """
-    A writer says you got it wrong. ← TODO — Milestone 5
-    """
-    payload = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Malformed JSON"}), 400
+
+    content_id = data.get("content_id", "")
+    creator_id = data.get("creator_id", "")
+    reason = data.get("reason", "")
+
+    if not content_id or not str(content_id).strip():
+        return jsonify({"error": "Missing content_id"}), 400
+    if not reason or not str(reason).strip():
+        return jsonify({"error": "Missing reason"}), 400
+
+    # Ensure content_id exists in our audit log
+    recent_logs = get_recent_logs(limit=200)
+    matching = [entry for entry in recent_logs if entry.get("content_id") == content_id]
+    if not matching:
+        return jsonify({"error": "content_id not found in audit logs"}), 404
+
+    record_appeal(content_id, creator_id, reason)
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Appeal successfully logged and marked under review."
+    }), 200
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
