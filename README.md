@@ -39,6 +39,14 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+When text arrives at `POST /submit` in `app.py`, it traverses a six-stage pipeline:
+
+1. **Validation**: Checks that payload contains valid JSON, non-empty `text`, and non-empty `creator_id`. Rejects oversized or empty payloads with HTTP 400.
+2. **Signal 1 (Predictability)**: Evaluated via `detector.py::model_signal`. It measures statistical token perplexity/predictability under a pre-trained language model (0 = highly unpredictable/human, 1 = uniform/AI-typical).
+3. **Signal 2 (Stylometry)**: Evaluated via `stylometry.py::style_signal`. It measures surface text properties including sentence length variance (burstiness) and vocabulary richness (type-token ratio).
+4. **Signal Aggregation**: Evaluated via `scoring.py::combine_signals`. It computes a weighted blend of both signals while applying a penalty or widening the uncertainty zone if the two signals disagree sharply.
+5. **Transparency Labeling**: Evaluated via `scoring.py::score_to_label`. Maps the continuous composite confidence score to one of three transparent human-facing labels (`high-confidence AI`, `high-confidence human`, or `unsure`).
+6. **Audit Persistence & Response**: Evaluated via `audit.py::record_submission`. Appends an immutable JSON record to `logs/audit.jsonl` containing `timestamp`, `content_id`, `creator_id`, individual signal outputs, aggregate score, and assigned label before returning JSON to the client.
 
 
 ---
@@ -53,19 +61,19 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** Measures token predictability
 
 **Why that might differ between human and AI writing:**
 
-**What it can't see:**
+**What it can't see:**Struggles on heavily formatted text, technical lists, code snippets, or non-native English speakers whose vocabulary distribution appears synthetically uniform.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** Measures structural variation (sentence length standard deviation, unique word ratios).
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:**Easily deceived by human flash fiction with intentionally repetitive cadence, or an AI prompted to "write with high burstiness and varied sentence lengths."
 
-**What it can't see:**
+**What it can't see:**Easily deceived by human flash fiction with intentionally repetitive cadence, or an AI prompted to "write with high burstiness and varied sentence lengths."
 
 ### The combining rule
 
